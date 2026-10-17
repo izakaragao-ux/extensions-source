@@ -11,7 +11,6 @@ keiyoushi {
 
     source {
         lang = "pt-BR"
-        className = "eu.kanade.tachiyomi.extension.pt.mangamillion.MangaMillion"
         baseUrl = "https://mangamillion.shueisha.co.jp/pt-BR"
     }
 }
