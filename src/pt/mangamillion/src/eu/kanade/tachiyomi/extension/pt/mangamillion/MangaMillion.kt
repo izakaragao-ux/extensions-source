@@ -26,7 +26,6 @@ class MangaMillion : HttpSource() {
         .add("Referer", "$baseUrl/")
         .add("User-Agent", "Mozilla/5.0 (Android; Mobile) Chrome/120.0.0.0")
 
-    // 1. POPULARES / CATÁLOGO
     override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/v1/titles?lang=pt-BR&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
@@ -34,7 +33,6 @@ class MangaMillion : HttpSource() {
         return MangasPage(mangas, hasNextPage = false)
     }
 
-    // 2. DETALHES DO MANGÁ
     override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/v1/title/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
@@ -42,7 +40,6 @@ class MangaMillion : HttpSource() {
         return manga
     }
 
-    // 3. CAPÍTULOS
     override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/v1/title/${manga.url}/chapters", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
@@ -50,7 +47,6 @@ class MangaMillion : HttpSource() {
         return chapters
     }
 
-    // 4. PÁGINAS DO CAPÍTULO
     override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/v1/chapter/${chapter.url}/pages", headers)
 
     override fun pageListParse(response: Response): List<Page> {
