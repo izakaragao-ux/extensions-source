@@ -27,9 +27,7 @@ class MangaMillion : HttpSource() {
         .add("User-Agent", "Mozilla/5.0 (Android; Mobile) Chrome/120.0.0.0")
 
     // 1. POPULARES / CATÁLOGO
-    override fun popularMangaRequest(page: Int): Request {
-        return GET("$apiUrl/v1/titles?lang=pt-BR&page=$page", headers)
-    }
+    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/v1/titles?lang=pt-BR&page=$page", headers)
 
     override fun popularMangaParse(response: Response): MangasPage {
         val mangas = mutableListOf<SManga>()
@@ -37,9 +35,7 @@ class MangaMillion : HttpSource() {
     }
 
     // 2. DETALHES DO MANGÁ
-    override fun mangaDetailsRequest(manga: SManga): Request {
-        return GET("$apiUrl/v1/title/${manga.url}", headers)
-    }
+    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/v1/title/${manga.url}", headers)
 
     override fun mangaDetailsParse(response: Response): SManga {
         val manga = SManga.create()
@@ -47,9 +43,7 @@ class MangaMillion : HttpSource() {
     }
 
     // 3. CAPÍTULOS
-    override fun chapterListRequest(manga: SManga): Request {
-        return GET("$apiUrl/v1/title/${manga.url}/chapters", headers)
-    }
+    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/v1/title/${manga.url}/chapters", headers)
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val chapters = mutableListOf<SChapter>()
@@ -57,9 +51,7 @@ class MangaMillion : HttpSource() {
     }
 
     // 4. PÁGINAS DO CAPÍTULO
-    override fun pageListRequest(chapter: SChapter): Request {
-        return GET("$apiUrl/v1/chapter/${chapter.url}/pages", headers)
-    }
+    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/v1/chapter/${chapter.url}/pages", headers)
 
     override fun pageListParse(response: Response): List<Page> {
         val pages = mutableListOf<Page>()
