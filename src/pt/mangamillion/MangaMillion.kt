@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.pt.mangamillion
 
+import eu.kanade.tachiyomi.annotations.Source
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -11,6 +12,7 @@ import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
 
+@Source
 class MangaMillion : HttpSource() {
 
     override val name = "Manga Million"
