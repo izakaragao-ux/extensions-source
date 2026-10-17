@@ -1,3 +1,0 @@
-ext.themeVersionCode = 1
-
-apply from: "$rootDir/common.gradle"
