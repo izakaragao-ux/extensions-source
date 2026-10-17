@@ -11,6 +11,7 @@ keiyoushi {
     libVersion = "1.6"
 
     source {
+        name = "Manga Million"
         lang = "pt-BR"
         baseUrl = "https://mangamillion.shueisha.co.jp"
     }
