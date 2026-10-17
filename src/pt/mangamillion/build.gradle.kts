@@ -7,7 +7,7 @@ plugins {
 keiyoushi {
     name = "MangaMillion"
     versionCode = 1
-    contentWarning = ContentWarning.SAFE 
+    contentWarning = ContentWarning.SAFE
     libVersion = "1.6"
 
     source {
