@@ -1,10 +1,17 @@
+import io.github.keiyoushi.gradle.api.ContentWarning
+
 plugins {
-    id("kei.plugins.extension")
+    alias(kei.plugins.extension)
 }
 
-kei {
-    extName = "MangaMillion"
-    extClass = "eu.kanade.tachiyomi.extension.pt.mangamillion.MangaMillion"
-    extVersionCode = 1
-    isNsfw = false
+keiyoushi {
+    name = "MangaMillion"
+    versionCode = 1
+    contentWarning = ContentWarning.SAFE 
+
+    source {
+        lang = "pt-BR"
+        className = "eu.kanade.tachiyomi.extension.pt.mangamillion.MangaMillion"
+        baseUrl = "https://mangamillion.shueisha.co.jp/pt-BR"
+    }
 }
