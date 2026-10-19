@@ -1,62 +1,111 @@
 package eu.kanade.tachiyomi.extension.pt.mangamillion
 
-import eu.kanade.tachiyomi.annotations.Source
-import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
-import eu.kanade.tachiyomi.source.online.HttpSource
-import okhttp3.Headers
-import okhttp3.Request
-import okhttp3.Response
+import eu.kanade.tachiyomi.source.model.SMangaUpdate
+import keiyoushi.annotation.Source
+import keiyoushi.network.get
+import keiyoushi.network.rateLimit
+import keiyoushi.source.KeiSource
+import keiyoushi.utils.parseAsProto
+import keiyoushi.utils.string
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
+import kotlin.time.Duration.Companion.seconds
 
 @Source
-class MangaMillion : HttpSource() {
+abstract class MangaMillion : KeiSource() {
 
-    override val name = "Manga Million"
-    override val baseUrl = "https://mangamillion.shueisha.co.jp"
-    override val lang = "pt-BR"
-    override val supportsLatest = true
+    override fun OkHttpClient.Builder.configureClient(): OkHttpClient.Builder = rateLimit(permits = 5, period = 1.seconds)
+        .addInterceptor(AccessTokenInterceptor())
+        .addInterceptor(ImageInterceptor())
 
-    private val apiUrl = "https://api.mangamillion.shueisha.co.jp"
-
-    override fun headersBuilder(): Headers.Builder = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("User-Agent", "Mozilla/5.0 (Android; Mobile) Chrome/120.0.0.0")
-
-    override fun popularMangaRequest(page: Int): Request = GET("$apiUrl/v1/titles?lang=pt-BR&page=$page", headers)
-
-    override fun popularMangaParse(response: Response): MangasPage {
-        val mangas = mutableListOf<SManga>()
-        return MangasPage(mangas, hasNextPage = false)
+    override suspend fun getPopularManga(page: Int): MangasPage {
+        val titles = fetchTitles().sortedByDescending { it.viewCount }
+        return MangasPage(titles.map { it.toSManga() }, false)
     }
 
-    override fun mangaDetailsRequest(manga: SManga): Request = GET("$apiUrl/v1/title/${manga.url}", headers)
-
-    override fun mangaDetailsParse(response: Response): SManga {
-        val manga = SManga.create()
-        return manga
+    override suspend fun getLatestUpdates(page: Int): MangasPage {
+        val titles = fetchTitles().sortedByDescending { it.updatedAt }
+        return MangasPage(titles.map { it.toSManga() }, false)
     }
 
-    override fun chapterListRequest(manga: SManga): Request = GET("$apiUrl/v1/title/${manga.url}/chapters", headers)
-
-    override fun chapterListParse(response: Response): List<SChapter> {
-        val chapters = mutableListOf<SChapter>()
-        return chapters
+    // The API has no working text search, so the full list (a single request) is filtered locally.
+    override suspend fun getSearchMangaList(page: Int, query: String, filters: FilterList): MangasPage {
+        val titles = fetchTitles()
+            .filter { it.name.contains(query, ignoreCase = true) || it.author?.contains(query, ignoreCase = true) == true }
+            .sortedByDescending { it.viewCount }
+        return MangasPage(titles.map { it.toSManga() }, false)
     }
 
-    override fun pageListRequest(chapter: SChapter): Request = GET("$apiUrl/v1/chapter/${chapter.url}/pages", headers)
-
-    override fun pageListParse(response: Response): List<Page> {
-        val pages = mutableListOf<Page>()
-        return pages
+    override suspend fun fetchMangaUpdate(
+        manga: SManga,
+        chapters: List<SChapter>,
+        fetchDetails: Boolean,
+        fetchChapters: Boolean,
+    ): SMangaUpdate = coroutineScope {
+        val details = async {
+            if (fetchDetails) getDetails(manga.url) else manga
+        }
+        val chapterList = async {
+            if (fetchChapters) getChapters(manga.url) else chapters
+        }
+        SMangaUpdate(details.await(), chapterList.await())
     }
 
-    override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()
-    override fun latestUpdatesRequest(page: Int): Request = popularMangaRequest(page)
-    override fun latestUpdatesParse(response: Response): MangasPage = popularMangaParse(response)
-    override fun searchMangaRequest(page: Int, query: String, filters: FilterList): Request = popularMangaRequest(page)
-    override fun searchMangaParse(response: Response): MangasPage = popularMangaParse(response)
+    override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val url = apiUrl("viewer", "translated_chapter_id" to chapter.url, "quality" to "middle")
+        val viewer = client.get(url).parseAsProto<ApiResponse>().viewer!!
+        return viewer.pages.mapIndexed { index, page ->
+            Page(index, imageUrl = "${page.imageUrl}#${viewer.aesKey}:${viewer.aesIv}")
+        }
+    }
+
+    override fun getMangaUrl(manga: SManga) = "$baseUrl/$lang/title/${manga.url}"
+
+    override fun getChapterUrl(chapter: SChapter) = "$baseUrl/$lang/title/${chapter.memo["titleId"]!!.string}/chapter/${chapter.url}"
+
+    override suspend fun getMangaByUrl(url: HttpUrl): SManga? {
+        if (url.host != baseUrl.toHttpUrl().host) return null
+        val id = url.pathSegments.getOrNull(url.pathSegments.indexOf("title") + 1)
+            ?.takeIf { it.toIntOrNull() != null }
+            ?: return null
+        return getDetails(id)
+    }
+
+    private suspend fun fetchTitles(): List<TitleSummary> {
+        val items = client.get(apiUrl("manga_list")).parseAsProto<ApiResponse>().mangaList!!.items
+        return items.filter { lang in it.languages }.map { it.title }
+    }
+
+    private suspend fun getDetails(id: String): SManga {
+        val url = apiUrl("title_detail", "original_title_id" to id)
+        return client.get(url).parseAsProto<ApiResponse>().titleDetail!!.title.toSManga(id)
+    }
+
+    private suspend fun getChapters(id: String): List<SChapter> {
+        val url = apiUrl("chapter_list", "original_title_id" to id, "translated_language" to lang)
+        return client.get(url).parseAsProto<ApiResponse>().chapterList!!.groups
+            .filter { it.type == GROUP_FREE || it.type == GROUP_SIMUL }
+            .flatMap { group -> group.chapters.map { it.toSChapter(id) } }
+            .reversed()
+    }
+
+    // avif_enable=false makes the API serve WebP, which every Mihon version can decode.
+    private fun apiUrl(endpoint: String, vararg params: Pair<String, String>): HttpUrl = "https://${AccessTokenInterceptor.API_HOST}/api/$endpoint".toHttpUrl().newBuilder()
+        .addQueryParameter("service_language", lang)
+        .addQueryParameter("avif_enable", "false")
+        .apply { params.forEach { (name, value) -> addQueryParameter(name, value) } }
+        .build()
+
+    companion object {
+        private const val GROUP_FREE = 0
+        private const val GROUP_SIMUL = 2
+    }
 }
